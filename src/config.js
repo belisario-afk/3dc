@@ -1,13 +1,16 @@
 // Global configuration and static car registry.
-// IMPORTANT: Do NOT start asset paths with a leading slash when deploying to GitHub
-// project pages. We will prefix import.meta.env.BASE_URL at runtime.
+// IMPORTANT (GitHub Pages): Do NOT begin asset paths with a leading slash
+// when deploying to a project page (e.g. https://user.github.io/3dc/).
+// Use relative paths like 'assets/models/car.glb'. We prefix BASE_URL at runtime.
 
 export const ENABLE_HDR = true;           // Gracefully ignored if env.hdr missing
 export const ENABLE_OUTLINE = true;
 export const ENABLE_SHADOWS = true;
 
 export const DIAGNOSTICS_LOGS = true;
-export const DYNAMIC_CAR_JSON_PATH = 'cars.json'; // relative; resolved with BASE_URL later
+
+// Dynamic car JSON (relative) – resolved with BASE_URL in loadDynamicCars()
+export const DYNAMIC_CAR_JSON_PATH = 'cars.json';
 
 export const CAMERA_CONFIG = {
   FOV: 70,
@@ -48,7 +51,8 @@ export const LIGHTING_CONFIG = {
   }
 };
 
-// IMPORTANT: modelPath values have NO leading slash now.
+// STATIC CARS ARRAY
+// NOTE: modelPath has NO leading slash.
 export let CARS = [
   {
     id: 'terzo',
@@ -97,7 +101,9 @@ export const QUALITY_PRESETS = {
 };
 
 export function logGroup(label, fn) {
-  if (!DIAGNOSTICS_LOGS) return fn && fn();
+  if (!DIAGNOSTICS_LOGS) {
+    return fn && fn();
+  }
   console.groupCollapsed(`[Diag] ${label}`);
   try {
     fn && fn();
@@ -106,43 +112,55 @@ export function logGroup(label, fn) {
   }
 }
 
+/**
+ * Dynamically load & merge cars from public/cars.json (optional).
+ * Ensures:
+ *  - Relative model paths (strips any leading slash)
+ *  - Unique IDs (adds -1, -2 suffix if collisions)
+ */
 export async function loadDynamicCars() {
   try {
     const base = (typeof import.meta !== 'undefined' ? import.meta.env.BASE_URL : '/');
-    const url = new URL(DYNAMIC_CAR_JSON_PATH, window.location.origin + base).toString();
-    const res = await fetch(url, { cache: 'no-store' });
+    // Build absolute URL robustly (BASE_URL ends with '/')
+    const dynamicUrl = new URL(DYNAMIC_CAR_JSON_PATH, window.location.origin + base).toString();
+    const res = await fetch(dynamicUrl, { cache: 'no-store' });
+
     if (!res.ok) {
-      console.warn('[DynamicCars] No cars.json found or unreachable.', res.status);
+      console.warn('[DynamicCars] cars.json not found (status:', res.status, ')');
       return;
     }
+
     const json = await res.json();
     if (!json || !Array.isArray(json.cars)) {
-      console.warn('[DynamicCars] Invalid cars.json format (missing cars array).');
+      console.warn('[DynamicCars] Invalid cars.json (missing cars array).');
       return;
     }
+
     const existingIds = new Set(CARS.map(c => c.id));
     const merged = json.cars.map(c => {
-      if (!c.id) c.id = `dyn-${Math.random().toString(36).slice(2)}`;
-      if (existingIds.has(c.id)) {
-        const original = c.id;
+      const clone = { ...c };
+      if (!clone.id) clone.id = `dyn-${Math.random().toString(36).slice(2)}`;
+
+      if (existingIds.has(clone.id)) {
+        const original = clone.id;
         let i = 1;
-        while (existingIds.has(`${c.id}-${i}`)) i++;
-        c.id = `${c.id}-${i}`;
-        console.warn(`[DynamicCars] ID collision for ${original}, renamed to ${c.id}`);
+        while (existingIds.has(`${clone.id}-${i}`)) i++;
+        clone.id = `${clone.id}-${i}`;
+        console.warn(`[DynamicCars] ID collision for "${original}", renamed "${clone.id}"`);
       }
-      existingIds.add(c.id);
-      return {
-        ...c,
-        // Strip leading slash if user put one
-        modelPath: (c.modelPath || '').replace(/^\//,''),
-        position: Array.isArray(c.position) ? c.position : [0,0,0],
-        rotation: Array.isArray(c.rotation) ? c.rotation : [0,0,0],
-        targetScale: typeof c.targetScale === 'number' ? c.targetScale : 3.2
-      };
+
+      existingIds.add(clone.id);
+      clone.modelPath = (clone.modelPath || '').replace(/^\//, '');
+      clone.position = Array.isArray(clone.position) ? clone.position : [0, 0, 0];
+      clone.rotation = Array.isArray(clone.rotation) ? clone.rotation : [0, 0, 0];
+      clone.targetScale = typeof clone.targetScale === 'number' ? clone.targetScale : 3.2;
+
+      return clone;
     });
+
     CARS = [...CARS, ...merged];
-    console.info(`[DynamicCars] Loaded ${merged.length} dynamic car(s). Total: ${CARS.length}`);
-  } catch (e) {
-    console.warn('[DynamicCars] Failed to load cars.json', e);
+    console.info(`[DynamicCars] Loaded ${merged.length} dynamic car(s). Total now: ${CARS.length}`);
+  } catch (err) {
+    console.warn('[DynamicCars] Failed loading cars.json', err);
   }
 }
