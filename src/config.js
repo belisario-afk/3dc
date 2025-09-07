@@ -1,11 +1,13 @@
 // Global configuration and static car registry.
+// IMPORTANT: Do NOT start asset paths with a leading slash when deploying to GitHub
+// project pages. We will prefix import.meta.env.BASE_URL at runtime.
 
 export const ENABLE_HDR = true;           // Gracefully ignored if env.hdr missing
 export const ENABLE_OUTLINE = true;
 export const ENABLE_SHADOWS = true;
 
-export const DIAGNOSTICS_LOGS = true;     // Toggle grouped logs
-export const DYNAMIC_CAR_JSON_PATH = '/cars.json';
+export const DIAGNOSTICS_LOGS = true;
+export const DYNAMIC_CAR_JSON_PATH = 'cars.json'; // relative; resolved with BASE_URL later
 
 export const CAMERA_CONFIG = {
   FOV: 70,
@@ -46,13 +48,12 @@ export const LIGHTING_CONFIG = {
   }
 };
 
-// Static baseline car definitions.
-// Each car: id, name, modelPath, position [x,y,z], rotation [x,y,z], optional targetScale, detailsKey.
+// IMPORTANT: modelPath values have NO leading slash now.
 export let CARS = [
   {
     id: 'terzo',
     name: 'Lamborghini Terzo Millennio',
-    modelPath: '/assets/models/placeholder-terzo.gltf',
+    modelPath: 'assets/models/free__lamborghini_terzo_millennio.glb',
     position: [0, 0, -6],
     rotation: [0, Math.PI * 0.15, 0],
     detailsKey: 'terzo',
@@ -61,7 +62,7 @@ export let CARS = [
   {
     id: 'concept-1',
     name: 'Concept Hyperion',
-    modelPath: '/assets/models/placeholder-car.gltf',
+    modelPath: 'assets/models/placeholder-car.gltf',
     position: [6, 0, -4],
     rotation: [0, -Math.PI * 0.35, 0],
     detailsKey: null,
@@ -70,7 +71,7 @@ export let CARS = [
   {
     id: 'concept-2',
     name: 'Aether Vision',
-    modelPath: '/assets/models/placeholder-car.gltf',
+    modelPath: 'assets/models/placeholder-car.gltf',
     position: [-6, 0, -4],
     rotation: [0, Math.PI * 0.5, 0],
     detailsKey: null,
@@ -78,7 +79,6 @@ export let CARS = [
   }
 ];
 
-// Distance gating (cars only load once player within threshold)
 export const CAR_LOAD_DISTANCE = 60;
 
 export const QUALITY_PRESETS = {
@@ -96,7 +96,6 @@ export const QUALITY_PRESETS = {
   }
 };
 
-// Logging helpers
 export function logGroup(label, fn) {
   if (!DIAGNOSTICS_LOGS) return fn && fn();
   console.groupCollapsed(`[Diag] ${label}`);
@@ -107,12 +106,13 @@ export function logGroup(label, fn) {
   }
 }
 
-// Utility to merge dynamic cars
 export async function loadDynamicCars() {
   try {
-    const res = await fetch(DYNAMIC_CAR_JSON_PATH, { cache: 'no-store' });
+    const base = (typeof import.meta !== 'undefined' ? import.meta.env.BASE_URL : '/');
+    const url = new URL(DYNAMIC_CAR_JSON_PATH, window.location.origin + base).toString();
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) {
-      console.warn('[DynamicCars] No cars.json found or unreachable.');
+      console.warn('[DynamicCars] No cars.json found or unreachable.', res.status);
       return;
     }
     const json = await res.json();
@@ -133,6 +133,8 @@ export async function loadDynamicCars() {
       existingIds.add(c.id);
       return {
         ...c,
+        // Strip leading slash if user put one
+        modelPath: (c.modelPath || '').replace(/^\//,''),
         position: Array.isArray(c.position) ? c.position : [0,0,0],
         rotation: Array.isArray(c.rotation) ? c.rotation : [0,0,0],
         targetScale: typeof c.targetScale === 'number' ? c.targetScale : 3.2

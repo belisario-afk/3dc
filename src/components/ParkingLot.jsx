@@ -1,17 +1,23 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { SRGBColorSpace, ACESFilmicToneMapping } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
-// Future expansion placeholder:
-// import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 
 import { FPSCameraController } from './FPSCameraController.js';
-import { CARS, CAR_LOAD_DISTANCE, ENABLE_HDR, ENABLE_OUTLINE, ENABLE_SHADOWS, LIGHTING_CONFIG, QUALITY_PRESETS, loadDynamicCars, logGroup } from '../config.js';
-import { CAR_DETAILS } from '../data/carDetails.js';
+import {
+  CARS,
+  CAR_LOAD_DISTANCE,
+  ENABLE_HDR,
+  ENABLE_OUTLINE,
+  ENABLE_SHADOWS,
+  LIGHTING_CONFIG,
+  QUALITY_PRESETS,
+  loadDynamicCars,
+  logGroup
+} from '../config.js';
 import { dispose3D } from '../utils/dispose3D.js';
 
 export function ParkingLot({
@@ -31,18 +37,14 @@ export function ParkingLot({
   const outlinePassRef = useRef();
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
-  const carObjectsRef = useRef([]); // { id, group }
+  const carObjectsRef = useRef([]);
   const clockRef = useRef(new THREE.Clock());
   const rafRef = useRef();
   const [internalCars, setInternalCars] = useState(CARS);
-  const loadedCarIdsRef = useRef(new Set());
 
-  // Expose renderer to child scaling logic
-  const attachRendererToSceneForAniso = useCallback((renderer, scene) => {
-    scene.renderer = renderer; // non-standard, used for convenience
-  }, []);
+  // Base path (always ends with /)
+  const base = (typeof import.meta !== 'undefined' ? import.meta.env.BASE_URL : '/');
 
-  // Loading Manager for overlay progress
   useEffect(() => {
     loadingManagerRef.current = new THREE.LoadingManager(
       () => { setProgress(100); },
@@ -52,7 +54,6 @@ export function ParkingLot({
     );
   }, []);
 
-  // Dynamic cars load (once)
   useEffect(() => {
     let active = true;
     loadDynamicCars().then(() => {
@@ -61,14 +62,11 @@ export function ParkingLot({
     return () => { active = false; };
   }, []);
 
-  // Scene initialization
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true
-    });
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = LIGHTING_CONFIG.exposure;
@@ -85,10 +83,9 @@ export function ParkingLot({
     const camera = new THREE.PerspectiveCamera(70, mount.clientWidth / mount.clientHeight, 0.1, 500);
     camera.position.set(0, 1.65, 8);
 
-    // Attach for anisotropy adjustments in CarModel
-    attachRendererToSceneForAniso(renderer, scene);
+    // Attach for anisotropy (non standard)
+    scene.renderer = renderer;
 
-    // Lighting
     const hemi = new THREE.HemisphereLight(
       LIGHTING_CONFIG.hemi.skyColor,
       LIGHTING_CONFIG.hemi.groundColor,
@@ -120,10 +117,10 @@ export function ParkingLot({
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Attempt asphalt texture
+    // Texture loader with base
     const texLoader = new THREE.TextureLoader(loadingManagerRef.current);
     texLoader.load(
-      '/assets/textures/asphalt_diffuse.jpg',
+      `${base}assets/textures/asphalt_diffuse.jpg`,
       map => {
         map.wrapS = map.wrapT = THREE.RepeatWrapping;
         map.repeat.set(40, 40);
@@ -137,7 +134,7 @@ export function ParkingLot({
       }
     );
 
-    // Parking lines (merged)
+    // Lines
     const linesGroup = new THREE.Group();
     const lineMat = new THREE.MeshBasicMaterial({ color: 0xd4af37 });
     const slotWidth = 3;
@@ -157,10 +154,10 @@ export function ParkingLot({
     }
     scene.add(linesGroup);
 
-    // Optional HDR env
     if (ENABLE_HDR) {
       new RGBELoader(loadingManagerRef.current)
-        .load('/assets/textures/env.hdr',
+        .load(
+          `${base}assets/textures/env.hdr`,
           hdr => {
             hdr.mapping = THREE.EquirectangularReflectionMapping;
             scene.environment = hdr;
@@ -170,11 +167,9 @@ export function ParkingLot({
         );
     }
 
-    // FPS Controller
     const fps = new FPSCameraController(camera, renderer.domElement);
     scene.add(fps.getObject());
 
-    // Post-processing composer
     const composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
@@ -190,10 +185,6 @@ export function ParkingLot({
       composer.addPass(outlinePass);
     }
 
-    // Future PostFX extension point:
-    // if (futureBloomEnabled) { composer.addPass(bloomPass); }
-
-    // Save refs
     rendererRef.current = renderer;
     sceneRef.current = scene;
     cameraRef.current = camera;
@@ -215,30 +206,27 @@ export function ParkingLot({
     const animate = () => {
       const dt = Math.min(clockRef.current.getDelta(), 0.05);
       fps.update(dt, reducedMotion);
-      // Distance gating for car loading
       const playerPos = fps.getObject().position;
       for (const record of carObjectsRef.current) {
         if (!record.inScene) {
           const dist = record.position.distanceTo(playerPos);
-            if (dist < CAR_LOAD_DISTANCE) {
-              scene.add(record.group);
-              record.inScene = true;
-            }
+          if (dist < CAR_LOAD_DISTANCE) {
+            scene.add(record.group);
+            record.inScene = true;
+          }
         }
       }
-
-      // Highlight selection
       if (outlinePass && selectedCarId) {
         const selected = carObjectsRef.current.find(c => c.id === selectedCarId);
         outlinePass.selectedObjects = selected ? [selected.group] : [];
       }
-
       composer.render();
       rafRef.current = requestAnimationFrame(animate);
     };
     rafRef.current = requestAnimationFrame(animate);
 
     logGroup('Scene Initialized', () => {
+      console.log('Base Path:', base);
       console.log('Quality:', quality);
       console.log('Cars (initial):', internalCars.length);
     });
@@ -247,41 +235,30 @@ export function ParkingLot({
       cancelAnimationFrame(rafRef.current);
       fps.dispose();
       window.removeEventListener('resize', onResize);
-      if (composer) {
-        composer.passes.length = 0;
-      }
-      if (outlinePass) {
-        outlinePass.selectedObjects = [];
-      }
-      // Dispose custom objects (cars etc.)
+      if (composer) composer.passes.length = 0;
+      if (outlinePass) outlinePass.selectedObjects = [];
       carObjectsRef.current.forEach(c => dispose3D(c.group));
-      // Dispose ground/geometries
       dispose3D(linesGroup);
       dispose3D(ground);
       renderer.dispose();
-      if (scene.environment && scene.environment.dispose) scene.environment.dispose();
+      if (scene.environment?.dispose) scene.environment.dispose();
       scene.traverse(obj => {
         if (obj.isMesh) {
-          if (obj.material?.dispose) obj.material.dispose();
-          if (obj.geometry?.dispose) obj.geometry.dispose();
+          obj.material?.dispose?.();
+          obj.geometry?.dispose?.();
         }
       });
       mount.removeChild(renderer.domElement);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality, reducedMotion, internalCars, selectedCarId]);
 
-  // Build car objects
   useEffect(() => {
     if (!sceneRef.current) return;
-    // Clear previous definitions
     carObjectsRef.current = [];
-
     internalCars.forEach(car => {
       const group = new THREE.Group();
       group.position.fromArray(car.position);
       group.rotation.set(car.rotation[0], car.rotation[1], car.rotation[2]);
-      // For distance gating: only add after close; store desired position
       carObjectsRef.current.push({
         id: car.id,
         group,
@@ -292,7 +269,6 @@ export function ParkingLot({
     });
   }, [internalCars]);
 
-  // Update quality presets on change (shadows + outline)
   useEffect(() => {
     const renderer = rendererRef.current;
     const outlinePass = outlinePassRef.current;
@@ -301,8 +277,11 @@ export function ParkingLot({
       const dirLights = [];
       sceneRef.current?.traverse(o => { if (o.isDirectionalLight) dirLights.push(o); });
       dirLights.forEach(dl => {
-        dl.shadow.mapSize.set(QUALITY_PRESETS[quality].shadowMapSize, QUALITY_PRESETS[quality].shadowMapSize);
-        dl.shadow.map?.dispose?.(); // Force reallocation
+        dl.shadow.mapSize.set(
+          QUALITY_PRESETS[quality].shadowMapSize,
+          QUALITY_PRESETS[quality].shadowMapSize
+        );
+        dl.shadow.map?.dispose?.();
       });
     }
     if (outlinePass) {
@@ -311,7 +290,6 @@ export function ParkingLot({
     }
   }, [quality]);
 
-  // Car selection via raycast
   const handleClick = useCallback((e) => {
     if (!sceneRef.current || !cameraRef.current) return;
     const rect = mountRef.current.getBoundingClientRect();
@@ -327,30 +305,23 @@ export function ParkingLot({
 
     const intersects = raycaster.intersectObjects(pickables, true);
     if (intersects.length > 0) {
-      // Find which car group root
       let group = intersects[0].object;
       while (group.parent && !carObjectsRef.current.find(c => c.group === group)) {
         group = group.parent;
       }
       const found = carObjectsRef.current.find(c => c.group === group);
-      if (found && onCarSelected) {
-        onCarSelected(found.car.id);
-      }
+      if (found && onCarSelected) onCarSelected(found.car.id);
     }
   }, [onCarSelected]);
 
-  // Pointer lock handler
   const handlePointerDown = useCallback((e) => {
     if (!rendererRef.current) return;
-    // Only lock if not clicking UI
     if (e.target.closest('.ui-block')) return;
-    // Distinguish left button
     if (e.button === 0) {
       fpsRef.current?.lock(e);
     }
   }, []);
 
-  // Attach events to mount
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;

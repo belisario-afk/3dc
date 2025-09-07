@@ -6,7 +6,7 @@ const repoName = '3dc';
 
 /**
  * Notes:
- * - For a project site at: https://<user>.github.io/3dc/
+ * - For a project site at: https://github.com/belisario-afk/3dc/
  *   base MUST be '/3dc/'.
  * - If you later move this to a user/organization root repo named
  *   <user>.github.io then change base to '/'.

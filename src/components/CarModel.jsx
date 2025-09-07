@@ -5,8 +5,8 @@ import { scaleToApproxSize } from '../utils/scaleModel.js';
 import { dispose3D } from '../utils/dispose3D.js';
 
 /**
- * CarModel handles lazy loading of a GLTF/GLB car model.
- * It notifies parent when loaded and is disposed on unmount.
+ * CarModel loads a GLTF/GLB. modelPath should be relative (no leading slash).
+ * We prefix import.meta.env.BASE_URL so it works under GitHub Pages subpath.
  */
 export function CarModel({
   car,
@@ -18,6 +18,7 @@ export function CarModel({
   const [loaded, setLoaded] = useState(false);
   const loaderRef = useRef();
   const gltfRef = useRef(null);
+  const base = (typeof import.meta !== 'undefined' ? import.meta.env.BASE_URL : '/');
 
   useEffect(() => {
     if (!scene) return;
@@ -28,8 +29,9 @@ export function CarModel({
     loaderRef.current = new GLTFLoader();
     let cancelled = false;
 
+    const resolvedPath = base + car.modelPath.replace(/^\//,'');
     loaderRef.current.load(
-      car.modelPath,
+      resolvedPath,
       gltf => {
         if (cancelled) return;
         gltfRef.current = gltf.scene;
@@ -40,16 +42,15 @@ export function CarModel({
         }
         groupRef.current.add(gltf.scene);
         setLoaded(true);
-        if (onLoaded) onLoaded(gltf.scene);
+        onLoaded?.(gltf.scene);
       },
       undefined,
       err => {
-        console.warn(`[CarModel] Failed to load ${car.modelPath}`, err);
+        console.warn(`[CarModel] Failed to load ${resolvedPath}`, err);
         setLoaded(true);
-        // Provide a simple placeholder geometry
         const placeholder = new THREE.Mesh(
           new THREE.BoxGeometry(2.5, 0.8, 5),
-            new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.3, roughness: 0.6 })
+          new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.3, roughness: 0.6 })
         );
         groupRef.current.add(placeholder);
       }
@@ -62,10 +63,9 @@ export function CarModel({
       }
       dispose3D(groupRef.current);
     };
-  }, [scene, car]);
+  }, [scene, car, base]);
 
   useEffect(() => {
-    // Adjust anisotropy on textures if quality changed
     if (!loaded || !gltfRef.current) return;
     const maxAniso = scene?.renderer?.capabilities?.getMaxAnisotropy?.() || 1;
     gltfRef.current.traverse(n => {
@@ -78,5 +78,5 @@ export function CarModel({
     });
   }, [loaded, qualityAnisotropy, scene]);
 
-  return null; // no React DOM output
+  return null;
 }
