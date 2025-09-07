@@ -1,0 +1,13 @@
+{
+  "cars": [
+    {
+      "id": "proto-x1",
+      "name": "Proto X1",
+      "modelPath": "/assets/models/placeholder-car.gltf",
+      "position": [12, 0, -10],
+      "rotation": [0, -0.6, 0],
+      "detailsKey": null,
+      "targetScale": 3.2
+    }
+  ]
+}
