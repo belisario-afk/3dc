@@ -1,0 +1,29 @@
+{
+  "name": "exotic-car-rental-3d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "3D immersive exotic car rental lot walkthrough (React + Vite + Three.js) deployable to GitHub Pages.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "verify": "node scripts/verify-plugin-react.cjs",
+    "diagnostics": "node scripts/diagnostics.cjs",
+    "deploy": "npm run build && npx gh-pages -d dist -b gh-pages"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.165.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "gh-pages": "^6.1.1",
+    "vite": "^5.3.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
