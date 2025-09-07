@@ -1,0 +1,46 @@
+name: Build & Deploy (gh-pages)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: read
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify React plugin present
+        run: npm run verify
+
+      - name: Diagnostics
+        run: npm run diagnostics
+
+      - name: Build
+        env:
+          # If you ever need to override base dynamically:
+          VITE_BASE_PATH: /exotic-car-rental-3d/
+        run: npm run build
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: dist
+          # keep_files: true  # Uncomment if you need to retain existing artifacts
+          force_orphan: true
